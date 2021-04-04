@@ -1,6 +1,6 @@
 """Base HACS class."""
 import logging
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 import pathlib
 
 import attr
@@ -13,6 +13,9 @@ from .helpers.functions.logger import getLogger
 from .models.core import HacsCore
 from .models.frontend import HacsFrontend
 from .models.system import HacsSystem
+
+if TYPE_CHECKING:
+    from .manager import HacsRepositoryManager
 
 
 class HacsCommon:
@@ -44,6 +47,7 @@ class HacsBaseAttributes:
     _repository: Optional[AIOGitHubAPIRepository]
     _stage: HacsStage = HacsStage.SETUP
     _common: Optional[HacsCommon]
+    _manager: Optional["HacsRepositoryManager"]
 
     core: HacsCore = attr.ib(HacsCore)
     common: HacsCommon = attr.ib(HacsCommon)
@@ -67,6 +71,16 @@ class HacsBase(HacsBaseAttributes):
     def stage(self, value: HacsStage) -> None:
         """Set the value for the stage property."""
         self._stage = value
+
+    @property
+    def manager(self) -> Optional["HacsRepositoryManager"]:
+        """Returns a HACS repository manager object."""
+        return self._manager
+
+    @manager.setter
+    def manager(self, value: "HacsRepositoryManager") -> None:
+        """Set the value for the manager property."""
+        self._manager = value
 
     @property
     def github(self) -> Optional[AIOGitHubAPI]:
@@ -117,6 +131,7 @@ class HacsBase(HacsBaseAttributes):
         """Disable HACS."""
         self.system.disabled = True
         self.system.disabled_reason = reason
+        self.hass.bus.fire("hacs/system", self.system.dict)
         self.log.error("HACS is disabled - %s", reason)
 
     def enable(self) -> None:

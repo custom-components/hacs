@@ -1,6 +1,7 @@
 """Setup HACS."""
 from datetime import datetime
 from aiogithubapi import AIOGitHubAPIException, GitHub
+from homeassistant.components.lovelace.system_health import system_health_info
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.const import __version__ as HAVERSION
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
@@ -8,7 +9,7 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.event import async_call_later
 
 from custom_components.hacs.const import DOMAIN, INTEGRATION_VERSION, STARTUP
-from custom_components.hacs.enums import HacsDisabledReason, HacsStage
+from custom_components.hacs.enums import HacsCategory, HacsDisabledReason, HacsStage
 from custom_components.hacs.hacsbase.configuration import Configuration
 from custom_components.hacs.hacsbase.data import HacsData
 from custom_components.hacs.helpers.functions.constrains import check_constrains
@@ -32,10 +33,7 @@ from custom_components.hacs.operational.setup_actions.websocket_api import (
 )
 from custom_components.hacs.share import get_hacs
 
-try:
-    from homeassistant.components.lovelace import system_health_info
-except ImportError:
-    from homeassistant.components.lovelace.system_health import system_health_info
+from ..manager import HacsRepositoryManager
 
 
 async def _async_common_setup(hass):
@@ -93,7 +91,6 @@ async def async_startup_wrapper_for_config_entry():
     except AIOGitHubAPIException:
         startup_result = False
     if not startup_result:
-        hacs.system.disabled = True
         raise ConfigEntryNotReady
     hacs.enable()
     return startup_result
@@ -106,8 +103,8 @@ async def async_startup_wrapper_for_yaml(_=None):
         startup_result = await async_hacs_startup()
     except AIOGitHubAPIException:
         startup_result = False
+
     if not startup_result:
-        hacs.system.disabled = True
         hacs.log.info("Could not setup HACS, trying again in 15 min")
         async_call_later(hacs.hass, 900, async_startup_wrapper_for_yaml)
         return
@@ -145,6 +142,11 @@ async def async_hacs_startup():
         hacs.configuration.token, async_create_clientsession(hacs.hass)
     )
     hacs.data = HacsData()
+    hacs.manager = HacsRepositoryManager(hacs)
+
+    await hacs.manager.async_register_repository(
+        HacsCategory.INTEGRATION, "hacs/integration"
+    )
 
     can_update = await get_fetch_updates_for(hacs.github)
     if can_update is None:
